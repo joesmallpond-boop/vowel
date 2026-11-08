@@ -37,6 +37,27 @@ static int destForParam (int p)
     }
 }
 
+// =========================================================================== shared drawing
+void drawPebble (juce::Graphics& g, juce::Rectangle<float> r, const juce::String& title)
+{
+    g.setColour (juce::Colours::black.withAlpha (0.25f));
+    g.fillRoundedRectangle (r.translated (0, 2.0f), 14.0f);
+    juce::ColourGradient grad (col::panel.brighter (0.06f), 0, r.getY(), col::panel.darker (0.08f), 0, r.getBottom(), false);
+    g.setGradientFill (grad);
+    g.fillRoundedRectangle (r, 14.0f);
+    g.setColour (juce::Colours::white.withAlpha (0.05f));
+    g.drawRoundedRectangle (r.reduced (1.0f), 13.0f, 1.2f);
+    if (title.isNotEmpty())
+    {
+        auto tr = r.reduced (14, 7).removeFromTop (17);
+        g.setColour (col::human);
+        g.fillEllipse (tr.getX(), tr.getCentreY() - 3.5f, 7.0f, 7.0f);
+        g.setColour (col::dim);
+        g.setFont (font (12.0f, true));
+        g.drawText (title.toLowerCase(), tr.withTrimmedLeft (12), juce::Justification::centredLeft);
+    }
+}
+
 // =========================================================================== LookAndFeel
 LookAndFeel::LookAndFeel()
 {
@@ -69,29 +90,42 @@ LookAndFeel::LookAndFeel()
 
 void LookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w, int h, float pos, float a0, float a1, juce::Slider& s)
 {
-    const auto bounds = juce::Rectangle<float> ((float) x, (float) y, (float) w, (float) h).reduced (4.0f);
+    // "worm-segment" knob: the arc is a row of beads that fill like a worm growing round the dial
+    const auto bounds = juce::Rectangle<float> ((float) x, (float) y, (float) w, (float) h).reduced (3.0f);
     const float r = std::min (bounds.getWidth(), bounds.getHeight()) * 0.5f;
     const auto c = bounds.getCentre();
-    const float thick = juce::jlimit (2.5f, 6.0f, r * 0.16f);
     const bool bipolar = s.getMinimum() < 0.0 && s.getMaximum() > 0.0;
-    const float angle = a0 + pos * (a1 - a0);
     const juce::Colour accent ((juce::uint32) (juce::int64) s.getProperties().getWithDefault ("accent", (juce::int64) col::human.getARGB()));
+    const float zeroPos = bipolar ? (float) ((0.0 - s.getMinimum()) / (s.getMaximum() - s.getMinimum())) : 0.0f;
 
-    juce::Path track; track.addCentredArc (c.x, c.y, r - thick, r - thick, 0, a0, a1, true);
-    g.setColour (col::edge);
-    g.strokePath (track, juce::PathStrokeType (thick, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    const int beads = juce::jlimit (9, 21, (int) (r * 0.55f));
+    const float beadR = juce::jlimit (1.6f, 3.6f, r * 0.11f);
+    for (int i = 0; i < beads; ++i)
+    {
+        const float t = (float) i / (float) (beads - 1);
+        const float a = a0 + t * (a1 - a0);
+        const auto p = c.getPointOnCircumference (r - beadR, a);
+        const bool lit = bipolar ? (t >= std::min (zeroPos, pos) - 1e-4f && t <= std::max (zeroPos, pos) + 1e-4f) : t <= pos + 1e-4f;
+        const float br = lit ? beadR * (0.85f + 0.3f * std::sin (t * 9.0f)) : beadR * 0.7f;
+        g.setColour (lit ? (s.isEnabled() ? accent : col::dim) : col::edge);
+        g.fillEllipse (p.x - br, p.y - br, br * 2, br * 2);
+    }
 
-    const float from = bipolar ? a0 + (float) ((0.0 - s.getMinimum()) / (s.getMaximum() - s.getMinimum())) * (a1 - a0) : a0;
-    juce::Path val; val.addCentredArc (c.x, c.y, r - thick, r - thick, 0, std::min (from, angle), std::max (from, angle), true);
-    g.setColour (s.isEnabled() ? accent : col::dim);
-    g.strokePath (val, juce::PathStrokeType (thick, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-
-    const float inner = r - thick * 2.2f;
-    g.setColour (col::panelHi);
+    // soft round cap
+    const float inner = r - beadR * 2.0f - 3.0f;
+    juce::ColourGradient grad (col::panelHi.brighter (0.25f), c.x, c.y - inner, col::panel.darker (0.2f), c.x, c.y + inner, false);
+    g.setGradientFill (grad);
     g.fillEllipse (c.x - inner, c.y - inner, inner * 2, inner * 2);
-    juce::Point<float> tip (c.x + std::sin (angle) * inner * 0.82f, c.y - std::cos (angle) * inner * 0.82f);
+    g.setColour (juce::Colours::black.withAlpha (0.25f));
+    g.drawEllipse (c.x - inner, c.y - inner, inner * 2, inner * 2, 1.0f);
+
+    // pointer: a fat little stub with a cream tip
+    const float angle = a0 + pos * (a1 - a0);
+    const auto from = c.getPointOnCircumference (inner * 0.2f, angle);
+    const auto to = c.getPointOnCircumference (inner * 0.78f, angle);
     g.setColour (col::text);
-    g.drawLine (juce::Line<float> (c.getPointOnCircumference (inner * 0.25f, angle), tip), 2.0f);
+    g.drawLine (juce::Line<float> (from, to), juce::jmax (2.0f, inner * 0.16f));
+    g.fillEllipse (to.x - inner * 0.1f, to.y - inner * 0.1f, inner * 0.2f, inner * 0.2f);
 }
 
 void LookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, int w, int h, float pos, float, float, juce::Slider::SliderStyle style, juce::Slider& s)
@@ -99,41 +133,62 @@ void LookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, int w, int 
     const bool horiz = style == juce::Slider::LinearHorizontal || style == juce::Slider::LinearBar;
     auto b = juce::Rectangle<float> ((float) x, (float) y, (float) w, (float) h);
     const bool blendStyle = s.getProperties().contains ("blend");
-    if (horiz)
+    if (! horiz) { LookAndFeel_V4::drawLinearSlider (g, x, y, w, h, pos, 0, 0, style, s); return; }
+
+    if (blendStyle)
     {
-        const float th = blendStyle ? 10.0f : 4.0f;
-        auto track = b.withSizeKeepingCentre (b.getWidth(), th);
-        if (blendStyle)
+        // a wiggly track from pink (human) to mint (synth) with the worm's head as the thumb
+        juce::Path wave;
+        const float cy = b.getCentreY();
+        for (float xx = b.getX(); xx <= b.getRight(); xx += 3.0f)
         {
-            juce::ColourGradient grad (col::human, track.getX(), 0, col::synth, track.getRight(), 0, false);
-            g.setGradientFill (grad);
-            g.fillRoundedRectangle (track, th * 0.5f);
+            const float t = (xx - b.getX()) / b.getWidth();
+            const float yy = cy + std::sin (t * 22.0f) * 3.0f * (0.3f + t);
+            if (xx == b.getX()) wave.startNewSubPath (xx, yy); else wave.lineTo (xx, yy);
         }
-        else
+        juce::ColourGradient grad (col::human, b.getX(), 0, col::synth, b.getRight(), 0, false);
+        g.setGradientFill (grad);
+        g.strokePath (wave, juce::PathStrokeType (7.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        const float kr = 13.0f;
+        const float bt = juce::jlimit (0.0f, 1.0f, (pos - b.getX()) / juce::jmax (1.0f, b.getWidth()));
+        g.setColour (bt < 0.5f ? col::human : col::synth);
+        g.fillEllipse (pos - kr, cy - kr, kr * 2, kr * 2);
+        g.setColour (col::bg.withAlpha (0.4f));
+        g.drawEllipse (pos - kr, cy - kr, kr * 2, kr * 2, 2.0f);
+        // eyes
+        for (float ex : { -4.5f, 4.5f })
         {
-            g.setColour (col::edge); g.fillRoundedRectangle (track, 2.0f);
-            const bool bipolar = s.getMinimum() < 0.0 && s.getMaximum() > 0.0;
-            const float zero = bipolar ? track.getCentreX() : track.getX();
-            g.setColour (pos >= zero ? col::human : col::synth);
-            g.fillRoundedRectangle (juce::Rectangle<float> (std::min (zero, pos), track.getY(), std::abs (pos - zero), th), 2.0f);
+            g.setColour (juce::Colours::white); g.fillEllipse (pos + ex - 3.2f, cy - 6.0f, 6.4f, 7.0f);
+            g.setColour (col::bg); g.fillEllipse (pos + ex - 1.4f, cy - 3.6f, 2.8f, 3.2f);
         }
-        const float kr = blendStyle ? 11.0f : 6.0f;
-        g.setColour (col::text);
-        g.fillEllipse (pos - kr, b.getCentreY() - kr, kr * 2, kr * 2);
-        g.setColour (col::bg);
-        g.drawEllipse (pos - kr, b.getCentreY() - kr, kr * 2, kr * 2, 2.0f);
+        g.setColour (col::bg); g.fillEllipse (pos - 3.0f, cy + 3.0f, 6.0f, 4.0f);
+        return;
     }
-    else LookAndFeel_V4::drawLinearSlider (g, x, y, w, h, pos, 0, 0, style, s);
+
+    const float th = 6.0f;
+    auto track = b.withSizeKeepingCentre (b.getWidth(), th);
+    g.setColour (col::edge); g.fillRoundedRectangle (track, th * 0.5f);
+    const bool bipolar = s.getMinimum() < 0.0 && s.getMaximum() > 0.0;
+    const float zero = bipolar ? track.getCentreX() : track.getX();
+    g.setColour (pos >= zero ? col::human : col::synth);
+    g.fillRoundedRectangle (juce::Rectangle<float> (std::min (zero, pos), track.getY(), std::abs (pos - zero), th), th * 0.5f);
+    const float kr = 6.5f;
+    g.setColour (col::text);
+    g.fillEllipse (pos - kr, b.getCentreY() - kr, kr * 2, kr * 2);
 }
 
 void LookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Button& b, const juce::Colour&, bool over, bool down)
 {
-    auto r = b.getLocalBounds().toFloat().reduced (0.5f);
+    auto r = b.getLocalBounds().toFloat().reduced (1.0f);
     const bool on = b.getToggleState();
-    g.setColour (on ? col::human : (down ? col::edge : (over ? col::panelHi.brighter (0.08f) : col::panelHi)));
-    g.fillRoundedRectangle (r, 5.0f);
-    g.setColour (col::edge);
-    g.drawRoundedRectangle (r, 5.0f, 1.0f);
+    const float rad = r.getHeight() * 0.5f;
+    g.setColour (on ? col::human : (down ? col::edge : (over ? col::panelHi.brighter (0.12f) : col::panelHi)));
+    g.fillRoundedRectangle (r, rad);
+    if (! on)
+    {
+        g.setColour (juce::Colours::white.withAlpha (0.06f));
+        g.fillRoundedRectangle (r.withHeight (r.getHeight() * 0.45f).reduced (3, 1), rad);
+    }
 }
 
 void LookAndFeel::drawToggleButton (juce::Graphics& g, juce::ToggleButton& b, bool over, bool)
@@ -261,17 +316,7 @@ Toggle::Toggle (VowelWormProcessor& p, int paramIndex, const juce::String& label
 
 void Section::paint (juce::Graphics& g)
 {
-    auto r = getLocalBounds().toFloat();
-    g.setColour (col::panel);
-    g.fillRoundedRectangle (r, 8.0f);
-    g.setColour (col::edge);
-    g.drawRoundedRectangle (r.reduced (0.5f), 8.0f, 1.0f);
-    if (title.isNotEmpty())
-    {
-        g.setColour (col::dim);
-        g.setFont (font (11.5f, true));
-        g.drawText (title.toUpperCase(), r.reduced (12, 6).removeFromTop (16), juce::Justification::centredLeft);
-    }
+    drawPebble (g, getLocalBounds().toFloat(), title);
 }
 
 void Section::resized()
@@ -305,23 +350,24 @@ void LevelMeter::paint (juce::Graphics& g)
 {
     auto r = getLocalBounds().toFloat();
     auto lab = r.removeFromBottom (16);
-    g.setColour (col::dim); g.setFont (font (10.5f, true));
-    g.drawText (label, lab, juce::Justification::centred);
-    auto bar = r.withSizeKeepingCentre (std::min (14.0f, r.getWidth()), r.getHeight());
-    g.setColour (col::bg); g.fillRoundedRectangle (bar, 3.0f);
-    auto fill = bar.withTop (bar.getBottom() - bar.getHeight() * level);
-    juce::ColourGradient grad (col::ok, 0, bar.getBottom(), col::warn, 0, bar.getY() + bar.getHeight() * 0.2f, false);
-    g.setGradientFill (grad); g.fillRoundedRectangle (fill, 3.0f);
-    const float hy = bar.getBottom() - bar.getHeight() * hold;
-    g.setColour (col::text); g.fillRect (bar.getX(), hy, bar.getWidth(), 1.5f);
-    g.setColour (clipped ? col::clip : col::edge); g.fillRoundedRectangle (bar.withHeight (4.0f), 2.0f);
-    // scale
-    g.setColour (col::dim.withAlpha (0.6f)); g.setFont (font (9.0f));
-    for (int db : { 0, -12, -24, -36, -48 })
+    g.setColour (col::dim); g.setFont (font (11.0f, true));
+    g.drawText (label.toLowerCase(), lab, juce::Justification::centred);
+    auto bar = r.withSizeKeepingCentre (std::min (16.0f, r.getWidth()), r.getHeight());
+    // segmented "worm" meter: beads stacked from the bottom
+    const int segs = 24;
+    const float sh = bar.getHeight() / (float) segs;
+    for (int i = 0; i < segs; ++i)
     {
-        const float yy = bar.getBottom() - bar.getHeight() * (float) (db + 60) / 60.0f;
-        g.drawText (juce::String (db), juce::Rectangle<float> (bar.getRight() + 2, yy - 6, 24, 12), juce::Justification::centredLeft);
+        const float t = (float) (i + 1) / (float) segs;
+        auto seg = juce::Rectangle<float> (bar.getX(), bar.getBottom() - sh * (float) (i + 1), bar.getWidth(), sh).reduced (1.0f, 1.0f);
+        const bool lit = t <= level + 1e-4f;
+        const juce::Colour c = t > 0.95f ? col::clip : (t > 0.8f ? col::warn : col::ok);
+        g.setColour (lit ? c : col::edge.withAlpha (0.6f));
+        g.fillRoundedRectangle (seg, seg.getHeight() * 0.5f);
     }
+    const float hy = bar.getBottom() - bar.getHeight() * hold;
+    g.setColour (col::text); g.fillRoundedRectangle (bar.getX() - 2, hy - 1, bar.getWidth() + 4, 2.0f, 1.0f);
+    if (clipped) { g.setColour (col::clip); g.fillEllipse (bar.getCentreX() - 4, bar.getY() - 10, 8, 8); }
 }
 
 void PitchDisplay::update (float h, float c)
@@ -332,27 +378,34 @@ void PitchDisplay::update (float h, float c)
 void PitchDisplay::paint (juce::Graphics& g)
 {
     auto r = getLocalBounds().toFloat();
-    g.setColour (col::panelHi); g.fillRoundedRectangle (r, 6.0f);
-    r = r.reduced (10, 6);
-    g.setColour (col::dim); g.setFont (font (10.5f, true));
-    g.drawText ("SUNG PITCH", r.removeFromTop (14), juce::Justification::centredLeft);
+    g.setColour (col::panelHi); g.fillRoundedRectangle (r, 12.0f);
+    r = r.reduced (12, 7);
+    g.setColour (col::dim); g.setFont (font (11.5f, true));
+    g.drawText ("you're singing", r.removeFromTop (15), juce::Justification::centredLeft);
     const bool voiced = hz > 0;
     const float midi = voiced ? hzToMidi (hz) : 0;
     const int nn = (int) std::lround (midi);
     const float cents = (midi - (float) nn) * 100.0f;
     g.setColour (voiced ? col::text : col::dim);
-    g.setFont (font (30.0f, true));
-    g.drawText (voiced ? noteName (nn) : juce::String ("--"), r.removeFromTop (36), juce::Justification::centredLeft);
-    g.setFont (font (12.0f));
-    g.setColour (voiced ? (std::abs (cents) < 15 ? col::ok : col::warn) : col::dim);
-    g.drawText (voiced ? juce::String (cents >= 0 ? "+" : "") + juce::String ((int) std::lround (cents)) + " ct   " + juce::String (hz, 1) + " Hz" : juce::String ("unvoiced"),
-                r.removeFromTop (16), juce::Justification::centredLeft);
-    r.removeFromTop (4);
-    auto bar = r.removeFromTop (6);
-    g.setColour (col::bg); g.fillRoundedRectangle (bar, 3.0f);
-    g.setColour (col::human.interpolatedWith (col::ok, conf)); g.fillRoundedRectangle (bar.withWidth (bar.getWidth() * conf), 3.0f);
-    g.setColour (col::dim); g.setFont (font (9.5f));
-    g.drawText ("confidence", r.removeFromTop (14), juce::Justification::centredLeft);
+    g.setFont (font (34.0f, true));
+    g.drawText (voiced ? noteName (nn) : juce::String ("hmm?"), r.removeFromTop (38), juce::Justification::centredLeft);
+    // tuning: a little worm sliding along a rail, centred = in tune
+    auto rail = r.removeFromTop (16);
+    g.setColour (col::edge); g.fillRoundedRectangle (rail.withSizeKeepingCentre (rail.getWidth(), 4.0f), 2.0f);
+    g.setColour (col::ok.withAlpha (0.5f)); g.fillRect (rail.getCentreX() - 1.0f, rail.getY() + 2, 2.0f, rail.getHeight() - 4);
+    if (voiced)
+    {
+        const float x = rail.getCentreX() + juce::jlimit (-1.0f, 1.0f, cents / 50.0f) * rail.getWidth() * 0.5f;
+        g.setColour (std::abs (cents) < 15 ? col::ok : col::warn);
+        g.fillEllipse (x - 6, rail.getCentreY() - 6, 12, 12);
+    }
+    g.setColour (col::dim); g.setFont (font (10.5f));
+    g.drawText (voiced ? juce::String (cents >= 0 ? "+" : "") + juce::String ((int) std::lround (cents)) + " ct  ·  " + juce::String (hz, 1) + " Hz" : juce::String ("(no clear pitch)"),
+                r.removeFromTop (14), juce::Justification::centredLeft);
+    r.removeFromTop (3);
+    auto bar = r.removeFromTop (5);
+    g.setColour (col::bg); g.fillRoundedRectangle (bar, 2.5f);
+    g.setColour (col::human.interpolatedWith (col::ok, conf)); g.fillRoundedRectangle (bar.withWidth (bar.getWidth() * conf), 2.5f);
 }
 
 void KeyStrip::update (const Telemetry& t)
@@ -365,11 +418,11 @@ void KeyStrip::update (const Telemetry& t)
 void KeyStrip::paint (juce::Graphics& g)
 {
     auto r = getLocalBounds().toFloat();
-    g.setColour (col::panel); g.fillRoundedRectangle (r, 6.0f);
-    r = r.reduced (8, 6);
+    drawPebble (g, r);
+    r = r.reduced (10, 7);
     auto lab = r.removeFromLeft (64);
-    g.setColour (col::dim); g.setFont (font (10.5f, true));
-    g.drawText ("MIDI IN", lab, juce::Justification::centredLeft);
+    g.setColour (col::dim); g.setFont (font (12.0f, true));
+    g.drawText ("midi in", lab, juce::Justification::centredLeft);
     const int lo = 24, hi = 108; // C1..C8
     int whites = 0; for (int n = lo; n <= hi; ++n) if (! juce::MidiMessage::isMidiNoteBlack (n)) ++whites;
     const float ww = r.getWidth() / (float) whites;
@@ -380,84 +433,134 @@ void KeyStrip::paint (juce::Graphics& g)
     for (int n = lo; n <= hi; ++n)
     {
         if (juce::MidiMessage::isMidiNoteBlack (n)) { blacks.push_back ({ { r.getX() + wi * ww - ww * 0.32f, r.getY(), ww * 0.64f, r.getHeight() * 0.6f }, n }); continue; }
-        juce::Rectangle<float> k (r.getX() + wi * ww, r.getY(), ww - 1.0f, r.getHeight());
-        g.setColour (isHeld (n) ? col::human : juce::Colour (0xffd9d2c8));
-        g.fillRect (k);
-        if (isVoice (n)) { g.setColour (col::synth); g.fillEllipse (k.getCentreX() - 3, k.getBottom() - 9, 6, 6); }
-        if (n % 12 == 0) { g.setColour (col::dim); g.setFont (font (8.5f)); g.drawText ("C" + juce::String (n / 12 - 1), k.withTrimmedTop (k.getHeight() - 20).withTrimmedBottom (9), juce::Justification::centred); }
+        juce::Rectangle<float> k (r.getX() + wi * ww + 0.5f, r.getY(), ww - 1.5f, r.getHeight());
+        g.setColour (isHeld (n) ? col::human : juce::Colour (0xfff2e2ca));
+        g.fillRoundedRectangle (k, 3.0f);
+        if (isVoice (n)) { g.setColour (col::synth.darker (0.15f)); g.fillEllipse (k.getCentreX() - 3.5f, k.getBottom() - 10, 7, 7); }
+        if (n % 12 == 0) { g.setColour (col::dim.darker (0.3f)); g.setFont (font (8.5f)); g.drawText ("C" + juce::String (n / 12 - 1), k.withTrimmedTop (k.getHeight() - 22).withTrimmedBottom (10), juce::Justification::centred); }
         ++wi;
     }
     for (auto& [k, n] : blacks)
     {
-        g.setColour (isHeld (n) ? col::human.darker (0.2f) : juce::Colour (0xff2a2624));
-        g.fillRect (k);
+        g.setColour (isHeld (n) ? col::wormDark : col::bg);
+        g.fillRoundedRectangle (k, 2.5f);
         if (isVoice (n)) { g.setColour (col::synth); g.fillEllipse (k.getCentreX() - 2.5f, k.getBottom() - 8, 5, 5); }
     }
 }
 
 void VowelPad::update (float x, float y, float c, float a, float b)
 {
-    if (std::abs (x - px) < 0.002f && std::abs (y - py) < 0.002f && std::abs (c - conf) < 0.02f) return;
+    ++frame;
+    const bool moved = std::abs (x - px) > 0.001f || std::abs (y - py) > 0.001f;
+    if (moved)
+    {
+        const juce::Point<float> d (x - px, py - y);
+        const float len = d.getDistanceFromOrigin();
+        if (len > 1e-4f) look = look * 0.7f + (d / len) * 0.3f;
+    }
     px = x; py = y; conf = c; f1 = a; f2 = b;
-    if (c > 0.5f)
+    if (c > 0.5f || trailCount == 0)
     {
         trail[(size_t) trailPos] = { x, y };
         trailPos = (trailPos + 1) % (int) trail.size();
         trailCount = std::min (trailCount + 1, (int) trail.size());
     }
-    repaint();
+    repaint(); // the worm breathes, so it repaints every frame (one small component)
 }
 
 void VowelPad::paint (juce::Graphics& g)
 {
     auto r = getLocalBounds().toFloat();
-    g.setColour (col::panel); g.fillRoundedRectangle (r, 8.0f);
-    g.setColour (col::edge); g.drawRoundedRectangle (r.reduced (0.5f), 8.0f, 1.0f);
-    g.setColour (col::dim); g.setFont (font (11.5f, true));
-    g.drawText ("VOWEL SPACE", r.reduced (12, 6).removeFromTop (16), juce::Justification::centredLeft);
-    g.setFont (font (10.5f));
-    g.drawText ("F1 " + juce::String ((int) f1) + "  F2 " + juce::String ((int) f2), r.reduced (12, 6).removeFromTop (16), juce::Justification::centredRight);
+    drawPebble (g, r, "vowel space");
+    g.setColour (col::dim); g.setFont (font (10.5f));
+    g.drawText ("F1 " + juce::String ((int) f1) + "   F2 " + juce::String ((int) f2), r.reduced (14, 7).removeFromTop (17), juce::Justification::centredRight);
 
-    auto pad = r.reduced (26, 30).withTrimmedTop (4);
-    // grid
-    g.setColour (col::edge.withAlpha (0.6f));
-    for (int i = 0; i <= 4; ++i)
+    auto pad = r.reduced (30, 32).withTrimmedTop (4);
+    // soil strata instead of a grid
+    for (int i = 0; i < 5; ++i)
     {
-        const float fx = pad.getX() + pad.getWidth() * i / 4.0f, fy = pad.getY() + pad.getHeight() * i / 4.0f;
-        g.drawLine (fx, pad.getY(), fx, pad.getBottom(), 1.0f);
-        g.drawLine (pad.getX(), fy, pad.getRight(), fy, 1.0f);
+        const float yy = pad.getY() + pad.getHeight() * (0.1f + 0.2f * (float) i);
+        juce::Path strata;
+        for (float xx = pad.getX(); xx <= pad.getRight(); xx += 6.0f)
+        {
+            const float w = std::sin (xx * 0.035f + (float) i * 1.7f) * 3.0f;
+            if (xx == pad.getX()) strata.startNewSubPath (xx, yy + w); else strata.lineTo (xx, yy + w);
+        }
+        g.setColour (col::edge.withAlpha (0.45f));
+        g.strokePath (strata, juce::PathStrokeType (1.0f));
     }
-    // vowel landmarks (X = frontness, Y = openness; open at top)
     auto toPt = [&] (float x, float y) { return juce::Point<float> (pad.getX() + x * pad.getWidth(), pad.getBottom() - y * pad.getHeight()); };
     struct L { const char* t; float x, y; };
-    g.setFont (font (13.0f, true));
+    g.setFont (font (14.0f, true));
     for (L l : { L { "oo", 0.05f, 0.1f }, L { "oh", 0.08f, 0.62f }, L { "ah", 0.33f, 0.92f }, L { "eh", 0.78f, 0.55f }, L { "ee", 0.95f, 0.1f } })
     {
-        g.setColour (col::dim.withAlpha (0.55f));
-        g.drawText (l.t, juce::Rectangle<float> (24, 16).withCentre (toPt (l.x, l.y)), juce::Justification::centred);
+        const auto p = toPt (l.x, l.y);
+        g.setColour (col::panelHi); g.fillEllipse (p.x - 15, p.y - 10, 30, 20);
+        g.setColour (col::dim.withAlpha (0.8f));
+        g.drawText (l.t, juce::Rectangle<float> (30, 20).withCentre (p), juce::Justification::centred);
     }
-    g.setColour (col::dim); g.setFont (font (10.0f));
-    g.drawText ("back", juce::Rectangle<float> (pad.getX(), pad.getBottom() + 4, 60, 14), juce::Justification::centredLeft);
-    g.drawText ("front", juce::Rectangle<float> (pad.getRight() - 60, pad.getBottom() + 4, 60, 14), juce::Justification::centredRight);
+    g.setColour (col::dim); g.setFont (font (10.5f));
+    g.drawText ("back", juce::Rectangle<float> (pad.getX(), pad.getBottom() + 6, 60, 14), juce::Justification::centredLeft);
+    g.drawText ("front", juce::Rectangle<float> (pad.getRight() - 60, pad.getBottom() + 6, 60, 14), juce::Justification::centredRight);
     g.saveState();
-    g.addTransform (juce::AffineTransform::rotation (-juce::MathConstants<float>::halfPi, pad.getX() - 14, pad.getCentreY()));
-    g.drawText ("closed  -  open", juce::Rectangle<float> (pad.getX() - 14 - 60, pad.getCentreY() - 7, 120, 14), juce::Justification::centred);
+    g.addTransform (juce::AffineTransform::rotation (-juce::MathConstants<float>::halfPi, pad.getX() - 16, pad.getCentreY()));
+    g.drawText ("closed  -  open", juce::Rectangle<float> (pad.getX() - 16 - 60, pad.getCentreY() - 7, 120, 14), juce::Justification::centred);
     g.restoreState();
 
-    // trail
-    for (int i = 1; i < trailCount; ++i)
+    // ---- the worm ------------------------------------------------------------
+    const bool awake = conf > 0.5f;
+    const float breathe = std::sin ((float) frame * 0.12f);
+    const int n = trailCount;
+    // continuous tapering body: stroke each segment with a width that grows towards the head
+    auto ptAt = [&] (int back) { const int idx = (trailPos - 1 - back + (int) trail.size() * 2) % (int) trail.size(); return toPt (trail[(size_t) idx].x, trail[(size_t) idx].y); };
+    for (int pass = 0; pass < 2; ++pass)
+        for (int i = n - 1; i >= 1; --i)
+        {
+            const float t = 1.0f - (float) i / (float) n;   // 0 tail .. 1 head
+            const float w = 5.0f + 19.0f * t + (pass == 0 ? 3.0f : 0.0f);
+            const float a = awake ? 0.45f + 0.55f * t : 0.3f + 0.3f * t;
+            g.setColour ((pass == 0 ? col::wormDark : (i % 5 == 0 ? col::wormDark.brighter (0.2f) : col::human)).withAlpha (a));
+            g.drawLine (juce::Line<float> (ptAt (i), ptAt (i - 1)), w);
+            g.fillEllipse (ptAt (i).x - w * 0.5f, ptAt (i).y - w * 0.5f, w, w);
+        }
+    const auto head = toPt (px, py);
+    const float hr = 17.0f + (awake ? breathe * 0.8f : 0.0f);
+    g.setColour (juce::Colours::black.withAlpha (0.25f));
+    g.fillEllipse (head.x - hr + 2, head.y - hr + 3, hr * 2, hr * 2);
+    g.setColour (awake ? col::human : col::human.withSaturation (0.3f));
+    g.fillEllipse (head.x - hr, head.y - hr, hr * 2, hr * 2);
+    g.setColour (juce::Colours::white.withAlpha (0.25f));
+    g.fillEllipse (head.x - hr * 0.6f, head.y - hr * 0.8f, hr * 0.7f, hr * 0.45f);
+
+    // eyes look where the voice is heading; blink now and then
+    const bool blink = (frame % 97) < 3;
+    for (float side : { -1.0f, 1.0f })
     {
-        const int a = (trailPos - i - 1 + (int) trail.size()) % (int) trail.size();
-        const int b = (trailPos - i + (int) trail.size()) % (int) trail.size();
-        g.setColour (col::human.withAlpha (0.5f * (1.0f - (float) i / (float) trailCount)));
-        g.drawLine (juce::Line<float> (toPt (trail[(size_t) a].x, trail[(size_t) a].y), toPt (trail[(size_t) b].x, trail[(size_t) b].y)), 2.0f);
+        const juce::Point<float> e (head.x + side * hr * 0.38f, head.y - hr * 0.3f);
+        if (! awake || blink)
+        {
+            g.setColour (col::bg); g.drawLine (e.x - 3.5f, e.y, e.x + 3.5f, e.y, 1.8f);
+            continue;
+        }
+        g.setColour (juce::Colours::white); g.fillEllipse (e.x - 4.5f, e.y - 5.0f, 9.0f, 10.0f);
+        const auto pupil = e + look * 1.8f;
+        g.setColour (col::bg); g.fillEllipse (pupil.x - 2.2f, pupil.y - 2.4f, 4.4f, 4.8f);
     }
-    const auto p = toPt (px, py);
-    const float rad = 7.0f + 5.0f * conf;
-    g.setColour ((conf > 0.5f ? col::human : col::dim).withAlpha (0.25f));
-    g.fillEllipse (p.x - rad * 1.8f, p.y - rad * 1.8f, rad * 3.6f, rad * 3.6f);
-    g.setColour (conf > 0.5f ? col::human : col::dim);
-    g.fillEllipse (p.x - rad * 0.6f, p.y - rad * 0.6f, rad * 1.2f, rad * 1.2f);
+    // the mouth is the vowel: wide for "ee", round for "oo", tall for "ah"
+    const float mw = awake ? 4.0f + 13.0f * px : 6.0f;
+    const float mh = awake ? 3.0f + 12.0f * py : 1.5f;
+    const juce::Point<float> m (head.x, head.y + hr * 0.38f);
+    g.setColour (col::bg);
+    g.fillEllipse (m.x - mw * 0.5f, m.y - mh * 0.5f, mw, mh);
+    if (awake && mh > 7.0f) { g.setColour (col::clip.withAlpha (0.8f)); g.fillEllipse (m.x - mw * 0.3f, m.y + mh * 0.05f, mw * 0.6f, mh * 0.4f); }
+    if (! awake)
+    {
+        g.setColour (col::dim); g.setFont (font (13.0f, true));
+        const float zz = (float) (frame % 60) / 60.0f;
+        g.drawText ("z", juce::Rectangle<float> (head.x + hr * 0.6f, head.y - hr - 12 - zz * 10, 14, 14), juce::Justification::centred);
+        g.setFont (font (10.0f, true));
+        g.drawText ("z", juce::Rectangle<float> (head.x + hr * 1.1f, head.y - hr - 22 - zz * 10, 12, 12), juce::Justification::centred);
+    }
 }
 
 void VoiceStrip::update (const Telemetry& t, float b)
@@ -478,32 +581,40 @@ void VoiceStrip::update (const Telemetry& t, float b)
 void VoiceStrip::paint (juce::Graphics& g)
 {
     auto r = getLocalBounds().toFloat();
-    g.setColour (col::panel); g.fillRoundedRectangle (r, 8.0f);
-    g.setColour (col::dim); g.setFont (font (11.5f, true));
-    g.drawText ("HARMONY VOICES", r.reduced (12, 6).removeFromTop (16), juce::Justification::centredLeft);
-    auto cells = r.reduced (10, 8).withTrimmedTop (20);
+    drawPebble (g, r, "the choir");
+    auto cells = r.reduced (12, 8).withTrimmedTop (20);
     const float cw = cells.getWidth() / (float) kMaxVoices;
     for (int i = 0; i < kMaxVoices; ++i)
     {
-        auto c = juce::Rectangle<float> (cells.getX() + cw * i, cells.getY(), cw - 4, cells.getHeight());
+        auto c = juce::Rectangle<float> (cells.getX() + cw * (float) i, cells.getY(), cw, cells.getHeight()).reduced (3.0f, 0);
         const bool enabled = i < numVoices;
         const bool on = notes[(size_t) i] >= 0;
-        g.setColour (enabled ? col::panelHi : col::bg);
-        g.fillRoundedRectangle (c, 5.0f);
-        if (on)
+        const float lv = juce::jlimit (0.0f, 1.0f, levels[(size_t) i]);
+        auto face = c.withHeight (c.getWidth()).withCentre ({ c.getCentreX(), c.getY() + c.getWidth() * 0.5f });
+        if (! enabled)
         {
-            const float lv = juce::jlimit (0.0f, 1.0f, levels[(size_t) i]);
-            auto fill = c.withTop (c.getBottom() - c.getHeight() * (0.15f + 0.85f * lv));
-            const float a = 0.45f + 0.55f * lv;
-            g.saveState();
-            g.reduceClipRegion (fill.toNearestInt());
-            g.setColour (col::human.withAlpha (a)); g.fillRoundedRectangle (c.withWidth (c.getWidth() * (1.0f - blend)), 5.0f);
-            g.setColour (col::synth.withAlpha (a)); g.fillRoundedRectangle (c.withTrimmedLeft (c.getWidth() * (1.0f - blend)), 5.0f);
-            g.restoreState();
+            g.setColour (col::edge.withAlpha (0.5f)); g.fillEllipse (face.reduced (face.getWidth() * 0.25f));
+            continue;
         }
-        g.setColour (enabled ? (on ? col::bg : col::dim) : col::edge);
-        g.setFont (font (on ? 13.0f : 11.0f, on));
-        g.drawText (on ? noteName (notes[(size_t) i]) : juce::String (i + 1), c, juce::Justification::centred);
+        // a round singer: pink half (voice) and mint half (synth), split by the blend
+        g.saveState();
+        juce::Path circle; circle.addEllipse (face);
+        g.reduceClipRegion (circle);
+        g.setColour (on ? col::human : col::panelHi); g.fillRect (face);
+        if (on) { g.setColour (col::synth); g.fillRect (face.withTrimmedLeft (face.getWidth() * (1.0f - blend))); }
+        g.restoreState();
+        g.setColour (col::bg.withAlpha (0.6f));
+        // eyes
+        for (float sx : { -0.2f, 0.2f })
+            g.fillEllipse (face.getCentreX() + sx * face.getWidth() - 1.8f, face.getY() + face.getHeight() * 0.33f - 2.0f, 3.6f, on ? 4.0f : 1.5f);
+        // mouth opens with the voice's level
+        const float mh = on ? 2.0f + face.getHeight() * 0.32f * lv : 1.5f;
+        const float mw = face.getWidth() * 0.32f;
+        g.setColour (col::bg);
+        g.fillEllipse (face.getCentreX() - mw * 0.5f, face.getY() + face.getHeight() * 0.62f - mh * 0.3f, mw, mh);
+        g.setColour (on ? col::text : col::dim);
+        g.setFont (font (on ? 12.5f : 11.0f, on));
+        g.drawText (on ? noteName (notes[(size_t) i]) : juce::String (i + 1), c.withTop (face.getBottom() + 1), juce::Justification::centredTop);
     }
 }
 
@@ -518,26 +629,24 @@ void ExpressionMeters::update (const Telemetry& t)
 void ExpressionMeters::paint (juce::Graphics& g)
 {
     auto r = getLocalBounds().toFloat();
-    g.setColour (col::panel); g.fillRoundedRectangle (r, 8.0f);
-    g.setColour (col::dim); g.setFont (font (11.5f, true));
-    g.drawText ("VOICE EXPRESSION", r.reduced (12, 6).removeFromTop (16), juce::Justification::centredLeft);
-    auto rows = r.reduced (12, 8).withTrimmedTop (20);
-    static const char* names[] = { "Amplitude", "Attack", "Brightness", "Breath", "Pitch move", "Vibrato", "Voicing" };
+    drawPebble (g, r, "how you are singing");
+    auto rows = r.reduced (14, 8).withTrimmedTop (20);
+    static const char* names[] = { "loudness", "attack", "brightness", "breath", "pitch wobble", "vibrato", "voicing" };
     const float rh = rows.getHeight() / 7.0f;
     for (int i = 0; i < 7; ++i)
     {
         auto row = rows.removeFromTop (rh);
-        g.setColour (col::text); g.setFont (font (11.5f));
-        g.drawText (names[i], row.removeFromLeft (82), juce::Justification::centredLeft);
-        auto bar = row.withSizeKeepingCentre (row.getWidth(), 6.0f);
-        g.setColour (col::bg); g.fillRoundedRectangle (bar, 3.0f);
-        g.setColour (i == 4 ? col::synth : col::human);
+        g.setColour (col::text); g.setFont (font (12.0f));
+        g.drawText (names[i], row.removeFromLeft (92), juce::Justification::centredLeft);
+        auto bar = row.withSizeKeepingCentre (row.getWidth(), 8.0f);
+        g.setColour (col::bg.withAlpha (0.7f)); g.fillRoundedRectangle (bar, 4.0f);
+        g.setColour (i == 4 ? col::synth : (i == 3 ? col::warn : col::human));
         if (i == 4)
         {
             const float c = bar.getCentreX(), x = bar.getX() + bar.getWidth() * v[(size_t) i];
-            g.fillRoundedRectangle (juce::Rectangle<float> (std::min (c, x), bar.getY(), std::abs (x - c) + 2, 6.0f), 3.0f);
+            g.fillRoundedRectangle (juce::Rectangle<float> (std::min (c, x) - 4, bar.getY(), std::abs (x - c) + 8, 8.0f), 4.0f);
         }
-        else g.fillRoundedRectangle (bar.withWidth (bar.getWidth() * juce::jlimit (0.0f, 1.0f, v[(size_t) i])), 3.0f);
+        else g.fillRoundedRectangle (bar.withWidth (juce::jmax (8.0f, bar.getWidth() * juce::jlimit (0.0f, 1.0f, v[(size_t) i]))), 4.0f);
     }
 }
 
@@ -559,9 +668,57 @@ void StatusPills::paint (juce::Graphics& g)
         g.setColour (on ? col::bg : col::dim); g.setFont (font (11.0f, true));
         g.drawText (t, b, juce::Justification::centred);
     };
-    pill (r.removeFromLeft (w), "AUDIO IN", audio, col::ok); r.removeFromLeft (6);
-    pill (r.removeFromLeft (w), held > 0 ? "MIDI  " + juce::String (held) : juce::String ("MIDI"), midiFlash > 0 || held > 0, col::human); r.removeFromLeft (6);
-    pill (r.removeFromLeft (w), "VOICED", voiced, col::synth);
+    pill (r.removeFromLeft (w), audio ? "hearing you" : "no audio", audio, col::ok); r.removeFromLeft (6);
+    pill (r.removeFromLeft (w), held > 0 ? juce::String (held) + (held == 1 ? " note" : " notes") : juce::String ("no midi"), midiFlash > 0 || held > 0, col::human); r.removeFromLeft (6);
+    pill (r.removeFromLeft (w), voiced ? "singing" : "not singing", voiced, col::synth);
+}
+
+void WormTitle::update (float openness, float frontness, float level)
+{
+    ++t;
+    open += 0.35f * (openness - open);
+    front += 0.35f * (frontness - front);
+    lvl += 0.3f * (level - lvl);
+    repaint();
+}
+
+void WormTitle::paint (juce::Graphics& g)
+{
+    // "vowelworm" with both o's drawn as little mouths that sing the vowel you sing
+    const auto f = font (30.0f, true);
+    g.setFont (f);
+    const juce::String parts[] = { "v", "o", "welw", "o", "rm" };
+    float x = 2.0f;
+    const float baseY = (float) getHeight() * 0.5f;
+    int letter = 0;
+    for (int i = 0; i < 5; ++i)
+    {
+        const bool mouth = (i == 1 || i == 3);
+        if (mouth)
+        {
+            const float w = juce::GlyphArrangement::getStringWidth (f, "o");
+            const float bob = std::sin ((float) t * 0.25f + (float) letter) * 2.5f * lvl;
+            const juce::Point<float> c (x + w * 0.5f, baseY + 3.0f + bob);
+            const float R = w * 0.52f;
+            g.setColour (col::human);
+            g.fillEllipse (c.x - R, c.y - R, R * 2, R * 2);
+            const float mw = R * (0.5f + 0.9f * front) * (0.4f + 0.6f * juce::jlimit (0.0f, 1.0f, lvl * 1.5f));
+            const float mh = R * (0.25f + 1.0f * open) * (0.3f + 0.7f * juce::jlimit (0.0f, 1.0f, lvl * 1.5f));
+            g.setColour (col::bg);
+            g.fillEllipse (c.x - mw * 0.5f, c.y - mh * 0.5f, mw, mh);
+            x += w; ++letter;
+            continue;
+        }
+        for (auto ch : parts[i])
+        {
+            const juce::String one = juce::String::charToString (ch);
+            const float w = juce::GlyphArrangement::getStringWidth (f, one);
+            const float bob = std::sin ((float) t * 0.25f + (float) letter) * 2.5f * lvl;
+            g.setColour (col::text);
+            g.drawText (one, juce::Rectangle<float> (x, bob, w + 2, (float) getHeight()), juce::Justification::centredLeft);
+            x += w; ++letter;
+        }
+    }
 }
 
 // =========================================================================== pages
@@ -600,23 +757,16 @@ public:
 
     void paint (juce::Graphics& g) override
     {
-        auto paintPanel = [&] (juce::Rectangle<int> r, const juce::String& t)
-        {
-            g.setColour (col::panel); g.fillRoundedRectangle (r.toFloat(), 8.0f);
-            g.setColour (col::dim); g.setFont (font (11.5f, true));
-            g.drawText (t, r.reduced (12, 6).removeFromTop (16), juce::Justification::centredLeft);
-        };
-        paintPanel (leftPanel, "INPUT");
-        paintPanel (knobPanel, "SOUND");
-        paintPanel (macroPanel, "PERFORMANCE MACROS");
-        // blend labels
+        drawPebble (g, leftPanel.toFloat(), "input");
+        drawPebble (g, knobPanel.toFloat(), "sound");
+        drawPebble (g, macroPanel.toFloat(), "performance macros");
         auto b = blendPanel.getBounds().toFloat();
-        g.setColour (col::panel); g.fillRoundedRectangle (b, 8.0f);
-        g.setFont (font (11.5f, true));
-        auto lab = b.reduced (14, 8).removeFromTop (16);
-        g.setColour (col::human); g.drawText ("HUMAN", lab, juce::Justification::centredLeft);
-        g.setColour (col::text.interpolatedWith (col::synth, 0.5f)); g.drawText ("HYBRID", lab, juce::Justification::centred);
-        g.setColour (col::synth); g.drawText ("SYNTHETIC", lab, juce::Justification::centredRight);
+        drawPebble (g, b);
+        g.setFont (font (13.0f, true));
+        auto lab = b.reduced (16, 8).removeFromTop (17);
+        g.setColour (col::human); g.drawText ("human", lab, juce::Justification::centredLeft);
+        g.setColour (col::text.interpolatedWith (col::synth, 0.5f)); g.drawText ("hybrid", lab, juce::Justification::centred);
+        g.setColour (col::synth); g.drawText ("synthetic", lab, juce::Justification::centredRight);
     }
 
     void resized() override
@@ -894,9 +1044,7 @@ public:
     void paint (juce::Graphics& g) override
     {
         auto b = getLocalBounds().toFloat();
-        g.setColour (col::panel); g.fillRoundedRectangle (b, 8.0f);
-        g.setColour (col::dim); g.setFont (font (11.5f, true));
-        g.drawText ("SYNTH VOWEL FILTER (follows your formants)", b.reduced (12, 6).removeFromTop (16), juce::Justification::centredLeft);
+        drawPebble (g, b, "synth vowel filter (follows your formants)");
         auto plot = b.reduced (16, 12).withTrimmedTop (20).withTrimmedBottom (14);
         const float lo = std::log (100.0f), hi = std::log (6000.0f);
         auto xOf = [&] (float hz) { return plot.getX() + plot.getWidth() * (std::log (hz) - lo) / (hi - lo); };
@@ -1020,12 +1168,7 @@ public:
     }
     void paint (juce::Graphics& g) override
     {
-        auto panel = [&] (juce::Rectangle<int> r, const juce::String& t)
-        {
-            g.setColour (col::panel); g.fillRoundedRectangle (r.toFloat(), 8.0f);
-            g.setColour (col::dim); g.setFont (font (11.5f, true));
-            g.drawText (t, r.reduced (12, 6).removeFromTop (16), juce::Justification::centredLeft);
-        };
+        auto panel = [&] (juce::Rectangle<int> r, const juce::String& t) { drawPebble (g, r.toFloat(), t); };
         panel (matrixArea, "MODULATION MATRIX   source  >  destination   depth   smoothing   activity");
         panel (macroArea, "MACRO ASSIGNMENTS   (amount = how far the target moves when the macro is fully up)");
         for (size_t r = 0; r < rows.size(); ++r)
@@ -1161,10 +1304,30 @@ VowelWormEditor::VowelWormEditor (VowelWormProcessor& p)
     setLookAndFeel (&lnf);
     addAndMakeVisible (content);
 
-    title.setText ("VOWELWORM", juce::dontSendNotification);
-    title.setFont (ui::font (22.0f, true));
-    title.setColour (juce::Label::textColourId, ui::col::human);
     content.addAndMakeVisible (title);
+
+    // soil texture, generated once
+    soil = juce::Image (juce::Image::RGB, baseW, baseH, true);
+    {
+        juce::Graphics sg (soil);
+        sg.fillAll (ui::col::bg);
+        juce::Random rnd (1234);
+        for (int i = 0; i < 2600; ++i)
+        {
+            const float x = rnd.nextFloat() * baseW, y = rnd.nextFloat() * baseH, r = 0.6f + rnd.nextFloat() * 1.8f;
+            sg.setColour ((rnd.nextBool() ? ui::col::panelHi : juce::Colours::black).withAlpha (0.18f + 0.25f * rnd.nextFloat()));
+            sg.fillEllipse (x, y, r, r);
+        }
+        for (int i = 0; i < 6; ++i)   // faint old burrows
+        {
+            juce::Path burrow;
+            float x = rnd.nextFloat() * baseW, y = rnd.nextFloat() * baseH, a = rnd.nextFloat() * 6.28f;
+            burrow.startNewSubPath (x, y);
+            for (int k = 0; k < 40; ++k) { a += (rnd.nextFloat() - 0.5f) * 0.6f; x += std::cos (a) * 12; y += std::sin (a) * 12; burrow.lineTo (x, y); }
+            sg.setColour (juce::Colours::black.withAlpha (0.12f));
+            sg.strokePath (burrow, juce::PathStrokeType (7.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        }
+    }
 
     content.addAndMakeVisible (presetBox);
     presetBox.onChange = [this] { if (presetBox.getSelectedId() > 0) loadPresetFromMenu (presetBox.getSelectedId()); };
@@ -1208,7 +1371,10 @@ VowelWormEditor::~VowelWormEditor()
     setLookAndFeel (nullptr);
 }
 
-void VowelWormEditor::paint (juce::Graphics& g) { g.fillAll (ui::col::bg); }
+void VowelWormEditor::paint (juce::Graphics& g)
+{
+    g.drawImage (soil, getLocalBounds().toFloat());
+}
 
 void VowelWormEditor::resized()
 {
@@ -1219,7 +1385,7 @@ void VowelWormEditor::resized()
 
     auto r = juce::Rectangle<int> (0, 0, baseW, baseH);
     auto header = r.removeFromTop (52).reduced (12, 10);
-    title.setBounds (header.removeFromLeft (150));
+    title.setBounds (header.removeFromLeft (172));
     presetBox.setBounds (header.removeFromLeft (220));
     header.removeFromLeft (4);
     prevPreset.setBounds (header.removeFromLeft (28)); header.removeFromLeft (2);
@@ -1250,6 +1416,7 @@ void VowelWormEditor::timerCallback()
     page.tick();
     int held = 0; for (int k = 0; k < 4; ++k) held += juce::countNumberOfBits (t.heldNotes[k].load());
     status.update (page.inPeak, t.midiActivity.load(), held, t.pitchHz.load() > 0);
+    title.update (t.vowelY.load(), t.vowelX.load(), t.pitchHz.load() > 0 ? t.amplitude.load() : 0.0f);
 }
 
 juce::File VowelWormEditor::userPresetDir() const

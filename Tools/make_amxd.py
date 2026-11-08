@@ -268,7 +268,7 @@ control(pt, send, "latencyMode", [280, 148, 110, 16], "live.tab")
 vline(pt, 394)
 # synth
 label(pt, "Voice > Synth", [400, 4, 90, 14])
-control(pt, send, "blend", [400, 24, 64, 76], extra={"appearance": 1})
+control(pt, send, "blend", [404, 30, 56, 66])
 for i, pid in enumerate(["oscMorph", "synthBrightness", "synthResonance"]):
     control(pt, send, pid, [468 + i * 45, 20, 44, 50])
 for i, pid in enumerate(["noise", "dynamicsFollow", "synthLevel"]):

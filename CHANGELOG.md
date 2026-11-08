@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0 — 2026-11-08
+- **Max for Live device**: the `vowelworm~` external (same engine) + generated `VowelWorm.amxd` with native Live controls
+  for all 154 parameters, a compact vowel/pitch display, preset menu, calibration, and an **Expand** window with large
+  displays (vowel space, pitch & harmony trace, voices, expression, synth vowel-filter curve) and all deeper controls.
+- **Plug-in UI redesign**: "soil & candy" look, a singing worm in the vowel pad (its mouth is your vowel), choir faces for
+  the voices, bead-segment knobs, a wordmark whose o's sing, and friendlier status pills.
+- Low Latency mode; vowel slew limiter; percentile block timing in `vw_render`; `vw_paramdump`; docs/PARAMETERS.md.
+- CI builds VST3 + AU + Standalone + the Max external and device; tests and pluginval run on macOS.
+
 ## 0.1.0 — 2026-11-08 (first implementation: Milestones 1–3, most of 4)
 
 ### Harmoniser

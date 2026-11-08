@@ -1,6 +1,7 @@
 # VowelWorm
 
-A MIDI-controlled vocal harmoniser and voice-following synthesiser (VST3 / AU, macOS; JUCE + CMake).
+A MIDI-controlled vocal harmoniser and voice-following synthesiser for macOS: **VST3**, **AU**, a **Standalone** app
+and a **Max for Live device**, all built from one C++ engine (JUCE + CMake for the plug-ins, the Max SDK for the device).
 
 Sing into it and play chords: each held note becomes a pitch-shifted copy of your live voice, formants
 preserved. A small synth voice follows every harmony note, and its vowel filter, brightness and dynamics
@@ -30,6 +31,12 @@ same parameters, same presets.
 VowelWorm control, or use *Configure* to map rack macros. Host values are the base; VowelWorm's internal
 matrix and macros add on top and the result is clamped, so the two always combine predictably. All
 changes are smoothed (no zipper noise, verified by the click tests).
+
+## Max for Live device
+
+`Max/` contains the `vowelworm~` external and a generated `VowelWorm.amxd` styled like a stock Live device, with an
+**Expand** window (EQ Eight-style) for big displays and the deeper controls. See `Max/README.md`. The CI download
+includes it in the "Max for Live" folder with an installer.
 
 ## Building
 

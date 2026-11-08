@@ -1,0 +1,9 @@
+{
+  "name": "VowelWorm",
+  "displayname": "VowelWorm",
+  "version": "0.1.0",
+  "author": "Joe Caple",
+  "description": "vowelworm~ external and displays for the VowelWorm Max for Live device",
+  "max_version_min": "8.5",
+  "os": { "macintosh": { "platform": ["aarch64", "x64"], "min_version": "none" } }
+}

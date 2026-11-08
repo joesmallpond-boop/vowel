@@ -44,6 +44,20 @@ jobs:
             ./pluginval.app/Contents/MacOS/pluginval --strictness-level 10 --validate-in-process --skip-gui-tests "$p" | tail -3 | tee -a test-results.txt
           done
 
+      - name: Max external + Max for Live device
+        run: |
+          git clone --depth 1 https://github.com/Cycling74/max-sdk-base.git ../max-sdk-base
+          cmake -S "Max/vowelworm~" -B build-max -DCMAKE_BUILD_TYPE=Release -DMAX_SDK_BASE="$PWD/../max-sdk-base" -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+          cmake --build build-max --config Release
+          ./build/vw_paramdump > build/params.json
+          mkdir -p dist/VowelWorm-M4L/externals dist/VowelWorm-M4L/javascript
+          python3 Tools/make_amxd.py build/params.json dist/VowelWorm-M4L/VowelWorm.amxd
+          cp -R "build-max/externals/vowelworm~.mxo" dist/VowelWorm-M4L/externals/
+          codesign --force --deep --sign - "dist/VowelWorm-M4L/externals/vowelworm~.mxo"
+          lipo -info "dist/VowelWorm-M4L/externals/vowelworm~.mxo/Contents/MacOS/vowelworm~" | tee -a test-results.txt
+          cp Max/package/javascript/vw_display.js dist/VowelWorm-M4L/javascript/
+          cp Max/package/package-info.json Max/package/install_m4l.command Max/README.md dist/VowelWorm-M4L/
+
       - name: Package
         run: |
           mkdir -p dist/VowelWorm
@@ -53,6 +67,7 @@ jobs:
           done
           cp docs/INSTALL_MAC.txt dist/VowelWorm/README-INSTALL.txt
           cp test-results.txt dist/VowelWorm/
+          cp -R dist/VowelWorm-M4L "dist/VowelWorm/Max for Live"
           hdiutil create -volname VowelWorm -srcfolder dist/VowelWorm -ov -format UDZO dist/VowelWorm-macOS.dmg
           (cd dist && zip -qry VowelWorm-macOS.zip VowelWorm)
 

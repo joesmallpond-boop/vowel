@@ -1,0 +1,7 @@
+build/
+build-*/
+.tools/
+dist/
+*.wav
+!Tests/data/*.wav
+.DS_Store

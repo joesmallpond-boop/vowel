@@ -1,0 +1,65 @@
+name: macOS build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure (universal: Intel + Apple Silicon)
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+
+      - name: Build
+        run: cmake --build build --config Release -j 4
+
+      - name: Engine tests
+        run: ./build/vw_tests | tee test-results.txt
+
+      - name: Real-time timing on a synthetic chord render
+        run: |
+          python3 - <<'EOF'
+          import math, struct
+          sr=48000; n=sr*8; out=bytearray()
+          ph=0.0
+          for i in range(n):
+              f=196*2**(0.3/12*math.sin(2*math.pi*5.5*i/sr)); ph+=f/sr
+              s=0.3*sum(math.sin(2*math.pi*k*ph)/k for k in range(1,12))
+              out+=struct.pack('<h',int(max(-1,min(1,s))*32767))
+          hdr=b'RIFF'+struct.pack('<I',36+len(out))+b'WAVEfmt '+struct.pack('<IHHIIHH',16,1,1,sr,sr*2,2,16)+b'data'+struct.pack('<I',len(out))
+          open('sweep.wav','wb').write(hdr+out)
+          EOF
+          ./build/vw_render sweep.wav out.wav --chords "0:55,59,62,67;4:57,60,64,69" --timing --block 64 | tee -a test-results.txt
+
+      - name: pluginval (strictness 10)
+        run: |
+          curl -fsSL -o pluginval.zip https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_macOS.zip
+          unzip -q pluginval.zip
+          for p in build/VowelWorm_artefacts/Release/VST3/VowelWorm.vst3 "build/VowelWormInst_artefacts/Release/VST3/VowelWorm Inst.vst3"; do
+            ./pluginval.app/Contents/MacOS/pluginval --strictness-level 10 --validate-in-process --skip-gui-tests "$p" | tail -3 | tee -a test-results.txt
+          done
+
+      - name: Package
+        run: |
+          mkdir -p dist/VowelWorm
+          for b in build/*_artefacts/Release/VST3/*.vst3 build/*_artefacts/Release/AU/*.component build/VowelWorm_artefacts/Release/Standalone/*.app; do
+            codesign --force --deep --sign - "$b"
+            cp -R "$b" dist/VowelWorm/
+          done
+          cp docs/INSTALL_MAC.txt dist/VowelWorm/README-INSTALL.txt
+          cp test-results.txt dist/VowelWorm/
+          hdiutil create -volname VowelWorm -srcfolder dist/VowelWorm -ov -format UDZO dist/VowelWorm-macOS.dmg
+          (cd dist && zip -qry VowelWorm-macOS.zip VowelWorm)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VowelWorm-macOS
+          path: |
+            dist/VowelWorm-macOS.dmg
+            dist/VowelWorm-macOS.zip
+            test-results.txt

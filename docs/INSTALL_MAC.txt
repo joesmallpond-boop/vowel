@@ -1,0 +1,19 @@
+VowelWorm — macOS install (CI build, ad-hoc signed, not notarised)
+
+1. Copy the plug-ins:
+     VowelWorm.vst3, VowelWorm Inst.vst3   ->  ~/Library/Audio/Plug-Ins/VST3/
+     VowelWorm.component, VowelWorm Inst.component (AU, optional) -> ~/Library/Audio/Plug-Ins/Components/
+   VowelWorm.app is a standalone version (choose your mic and MIDI keyboard in its Options menu).
+
+2. Because these builds are not notarised, remove the download quarantine (Terminal):
+     xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/VowelWorm*.vst3
+     xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/Components/VowelWorm*.component
+
+3. Ableton Live: Settings > Plug-Ins > enable "Use VST3 Plug-in System Folders" > Rescan.
+
+4. Routing:
+   Vocal audio track: Audio From = microphone, Monitor = In, insert VowelWorm.
+   MIDI track: MIDI From = keyboard, Monitor = In, MIDI To = vocal track -> VowelWorm.
+   (Fallback: VowelWorm Inst on the MIDI track, sidechain Audio From = vocal track.)
+
+test-results.txt in this folder contains the automated test, timing and pluginval output from the build machine.

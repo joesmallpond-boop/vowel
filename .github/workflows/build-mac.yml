@@ -6,6 +6,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: macos-latest
@@ -71,10 +74,42 @@ jobs:
           hdiutil create -volname VowelWorm -srcfolder dist/VowelWorm -ov -format UDZO dist/VowelWorm-macOS.dmg
           (cd dist && zip -qry VowelWorm-macOS.zip VowelWorm)
 
+      - name: Installer package (.pkg)
+        run: |
+          scripts/make_pkg.sh dist/VowelWorm 0.2.0
+          cp docs/INSTALL_MAC.txt dist/INSTALL_MAC.txt
+
+      - name: Test-install the package on this runner
+        run: |
+          sudo installer -pkg dist/VowelWorm-Installer.pkg -target / | tee -a test-results.txt
+          for f in "/Library/Audio/Plug-Ins/VST3/VowelWorm.vst3" "/Library/Audio/Plug-Ins/VST3/VowelWorm Inst.vst3" \
+                   "/Library/Audio/Plug-Ins/Components/VowelWorm.component" "/Applications/VowelWorm.app" \
+                   "/Users/Shared/Max 9/Packages/VowelWorm/externals/vowelworm~.mxo" "/Users/Shared/Max 8/Packages/VowelWorm/javascript/vw_display.js" \
+                   "/Users/Shared/Max 9/Packages/VowelWorm/VowelWorm.amxd"; do
+            if [ -e "$f" ]; then echo "installed: $f"; else echo "MISSING: $f"; exit 1; fi
+          done | tee -a test-results.txt
+          auval -a 2>/dev/null | grep -i vowel | tee -a test-results.txt || true
+
       - uses: actions/upload-artifact@v4
         with:
           name: VowelWorm-macOS
           path: |
+            dist/VowelWorm-Installer.pkg
             dist/VowelWorm-macOS.dmg
             dist/VowelWorm-macOS.zip
             test-results.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VowelWorm-Installer
+          path: dist/VowelWorm-Installer.pkg
+
+      - name: Publish "latest" release (main branch only)
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag 2>/dev/null || true
+          gh release create latest dist/VowelWorm-Installer.pkg dist/VowelWorm-macOS.dmg \
+            --title "VowelWorm (latest build)" --prerelease --target "$GITHUB_SHA" \
+            --notes "Automatic build of ${GITHUB_SHA::7}. Download **VowelWorm-Installer.pkg**, then right-click > Open (unsigned build). Installs VST3, AU, Standalone and the Max for Live device; deselect any you don't want under Customise. Not yet tested inside Ableton Live - see docs/TESTING.md."

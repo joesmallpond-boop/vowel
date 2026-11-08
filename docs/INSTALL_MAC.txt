@@ -1,4 +1,11 @@
-VowelWorm — macOS install (CI build, ad-hoc signed, not notarised)
+VowelWorm - macOS install
+
+EASIEST: VowelWorm-Installer.pkg
+  Right-click > Open (it is not notarised, so a plain double-click is refused the first time).
+  Click Customise to pick VST3 / AU / Standalone / Max for Live. Then rescan plug-ins in Live.
+  Nothing else to do - installer-placed files are not quarantined.
+
+MANUAL (from the DMG/zip):
 
 1. Copy the plug-ins:
      VowelWorm.vst3, VowelWorm Inst.vst3   ->  ~/Library/Audio/Plug-Ins/VST3/

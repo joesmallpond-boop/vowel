@@ -32,6 +32,16 @@ VowelWorm control, or use *Configure* to map rack macros. Host values are the ba
 matrix and macros add on top and the result is clamped, so the two always combine predictably. All
 changes are smoothed (no zipper noise, verified by the click tests).
 
+## Logic Pro (AU)
+
+1. Audio track for your vocal: input = mic, input monitoring on.
+2. Audio FX slot > Audio Units > **MIDI-controlled Effects** > Joe Caple > **VowelWorm**.
+3. Create a Software Instrument track for your keyboard (it can have no instrument loaded), then in the
+   VowelWorm window header choose that track in the **MIDI** side-chain menu. Select/arm the instrument track so your
+   keyboard plays into it.
+
+Requires macOS 11 or later (tested target: Monterey 12.7), Intel or Apple Silicon.
+
 ## Max for Live device
 
 `Max/` contains the `vowelworm~` external and a generated `VowelWorm.amxd` styled like a stock Live device, with an

@@ -16,10 +16,21 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: "Configure (universal - Intel + Apple Silicon)"
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
 
       - name: Build
         run: cmake --build build --config Release -j 4
+
+      - name: Check minimum macOS of plug-in binaries (must run on 12.x)
+        run: |
+          for b in build/*_artefacts/Release/VST3/*.vst3 build/*_artefacts/Release/AU/*.component build/VowelWorm_artefacts/Release/Standalone/*.app; do
+            exe="$b/Contents/MacOS/$(defaults read "$PWD/$b/Contents/Info.plist" CFBundleExecutable)"
+            for a in x86_64 arm64; do
+              v=$(vtool -arch $a -show-build "$exe" | awk '/minos/{print $2}')
+              echo "$(basename "$b") $a minos $v"
+              [ "${v%%.*}" -le 12 ] || { echo "too new: $v"; exit 1; }
+            done
+          done
 
       - name: Engine tests
         run: ./build/vw_tests | tee test-results.txt
@@ -50,7 +61,7 @@ jobs:
       - name: Max external + Max for Live device
         run: |
           git clone --depth 1 https://github.com/Cycling74/max-sdk-base.git ../max-sdk-base
-          cmake -S "Max/vowelworm~" -B build-max -DCMAKE_BUILD_TYPE=Release -DMAX_SDK_BASE="$PWD/../max-sdk-base" -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+          cmake -S "Max/vowelworm~" -B build-max -DCMAKE_BUILD_TYPE=Release -DMAX_SDK_BASE="$PWD/../max-sdk-base" -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
           cmake --build build-max --config Release
           ./build/vw_paramdump > build/params.json
           mkdir -p dist/VowelWorm-M4L/externals dist/VowelWorm-M4L/javascript
@@ -58,6 +69,7 @@ jobs:
           cp -R "build-max/externals/vowelworm~.mxo" dist/VowelWorm-M4L/externals/
           codesign --force --deep --sign - "dist/VowelWorm-M4L/externals/vowelworm~.mxo"
           lipo -info "dist/VowelWorm-M4L/externals/vowelworm~.mxo/Contents/MacOS/vowelworm~" | tee -a test-results.txt
+          v=$(vtool -arch x86_64 -show-build "dist/VowelWorm-M4L/externals/vowelworm~.mxo/Contents/MacOS/vowelworm~" | awk '/minos/{print $2}'); echo "external minos $v"; [ "${v%%.*}" -le 12 ]
           cp Max/package/javascript/vw_display.js dist/VowelWorm-M4L/javascript/
           cp Max/package/package-info.json Max/package/install_m4l.command Max/README.md dist/VowelWorm-M4L/
 
@@ -76,7 +88,7 @@ jobs:
 
       - name: Installer package (.pkg)
         run: |
-          scripts/make_pkg.sh dist/VowelWorm 0.2.0
+          scripts/make_pkg.sh dist/VowelWorm 0.2.1
           cp docs/INSTALL_MAC.txt dist/INSTALL_MAC.txt
 
       - name: Test-install the package on this runner
@@ -89,6 +101,11 @@ jobs:
             if [ -e "$f" ]; then echo "installed: $f"; else echo "MISSING: $f"; exit 1; fi
           done | tee -a test-results.txt
           auval -a 2>/dev/null | grep -i vowel | tee -a test-results.txt || true
+          # full Apple AU validation (what Logic runs before loading a plug-in)
+          auval -v aumf Vwrm Jcap | tail -5 | tee -a test-results.txt
+          auval -v aumu Vwri Jcap | tail -5 | tee -a test-results.txt
+          auval -v aumf Vwrm Jcap | grep -q "AU VALIDATION SUCCEEDED"
+          auval -v aumu Vwri Jcap | grep -q "AU VALIDATION SUCCEEDED"
 
       - uses: actions/upload-artifact@v4
         with:

@@ -1,12 +1,13 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(VowelWorm VERSION 0.1.0 LANGUAGES C CXX)
+# Must be set before project(): macOS 11+ so the build runs on Big Sur / Monterey (12.7) and later,
+# on both Intel and Apple Silicon.
+set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version")
+
+project(VowelWorm VERSION 0.2.1 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-if(APPLE)
-    set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Minimum macOS version")
-endif()
 
 option(VW_BUILD_PLUGIN "Build the JUCE plug-ins" ON)
 option(VW_BUILD_TESTS  "Build engine tests and the offline renderer" ON)

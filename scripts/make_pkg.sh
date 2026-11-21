@@ -83,7 +83,8 @@ cat > "$WORK/res/welcome.html" <<EOF
 <h2>VowelWorm $VERSION</h2>
 <p>A MIDI-controlled vocal harmoniser and voice-following synth.</p>
 <p>This installs the <b>VST3</b> and <b>Audio Unit</b> plug-ins, the <b>Standalone</b> app and the
-<b>Max for Live device</b>. Use <i>Customise</i> to choose.</p>
+<b>Max for Live device</b>. Use <i>Customise</i> to choose. Runs on macOS 11 or later, Intel and Apple Silicon.</p>
+<p><b>Logic Pro:</b> on an audio track with your vocal, open an Audio FX slot &gt; Audio Units &gt; MIDI-controlled Effects &gt; Joe Caple &gt; VowelWorm. Create a Software Instrument track for your keyboard, then in the VowelWorm window header pick that track in the <i>MIDI</i> (side chain) menu. Turn on input monitoring on the vocal track.</p>
 <p><b>Ableton setup:</b> put VowelWorm on your vocal track (Monitor = In). On a MIDI track set
 <i>MIDI To</i> = the vocal track, then choose VowelWorm. Rescan plug-ins in Live's settings after installing.</p>
 <p>The Max for Live device appears in Places &gt; User Library &gt; Presets &gt; Audio Effects &gt; Max Audio Effect.</p>
@@ -96,6 +97,7 @@ cat > "$WORK/distribution.xml" <<EOF
   <title>VowelWorm $VERSION</title>
   <welcome file="welcome.html" mime-type="text/html"/>
   <options customize="always" require-scripts="false" hostArchitectures="x86_64,arm64"/>
+  <allowed-os-versions><os-version min="11.0"/></allowed-os-versions>
   <domains enable_localSystem="true"/>
   <choices-outline>
     <line choice="vst3"/><line choice="au"/><line choice="app"/><line choice="m4l"/>

@@ -1,6 +1,7 @@
 # Builds vowelworm~.mxo with the official Max SDK (max-sdk-base, MIT licence).
 #   cmake -S "Max/vowelworm~" -B build-max -DMAX_SDK_BASE=/path/to/max-sdk-base -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
 cmake_minimum_required(VERSION 3.19)
+set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version")
 
 if(NOT MAX_SDK_BASE)
     message(FATAL_ERROR "Set MAX_SDK_BASE to a checkout of https://github.com/Cycling74/max-sdk-base")
